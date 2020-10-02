@@ -4,6 +4,7 @@ namespace Box\Spout\Writer\ODS\Manager;
 
 use Box\Spout\Common\Entity\Cell;
 use Box\Spout\Common\Entity\Row;
+use Box\Spout\Common\Entity\Style\EmptyStyle;
 use Box\Spout\Common\Entity\Style\Style;
 use Box\Spout\Common\Exception\InvalidArgumentException;
 use Box\Spout\Common\Exception\IOException;
@@ -155,14 +156,26 @@ class WorksheetManager implements WorksheetManagerInterface
      * @throws InvalidArgumentException If a cell value's type is not supported
      * @return string
      */
-    private function applyStyleAndGetCellXML(Cell $cell, Style $rowStyle, $currentCellIndex, $nextCellIndex)
+    private function applyStyleAndGetCellXML(Cell $cell, Style &$rowStyle, $currentCellIndex, $nextCellIndex)
     {
-        // Apply row and extra styles
-        $mergedCellAndRowStyle = $this->styleMerger->merge($cell->getStyle(), $rowStyle);
-        $cell->setStyle($mergedCellAndRowStyle);
-        $newCellStyle = $this->styleManager->applyExtraStylesIfNeeded($cell);
+        if ($cell->getStyle() instanceof EmptyStyle) {
+            $cell->setStyle($rowStyle);
 
-        $registeredStyle = $this->styleManager->registerStyle($newCellStyle);
+            $extraStyle = $this->styleManager->applyExtraStylesIfNeeded($cell);
+
+            if ($extraStyle) {
+                $registeredStyle = $this->styleManager->registerStyle($extraStyle);
+            } else {
+                $registeredStyle = $rowStyle = $this->styleManager->registerStyle($rowStyle);
+            }
+        } else {
+            $mergedCellAndRowStyle = $this->styleMerger->merge($cell->getStyle(), $rowStyle);
+            $cell->setStyle($mergedCellAndRowStyle);
+
+            $newCellStyle = $this->styleManager->applyExtraStylesIfNeeded($cell) ?: $mergedCellAndRowStyle;
+            $registeredStyle = $this->styleManager->registerStyle($newCellStyle);
+        }
+
         $styleIndex = $registeredStyle->getId() + 1; // 1-based
 
         $numTimesValueRepeated = ($nextCellIndex - $currentCellIndex);
